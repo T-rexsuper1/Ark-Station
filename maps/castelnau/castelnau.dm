@@ -16,6 +16,8 @@
 	#include "code/gamemodes/objectives.dm"
 	#include "code/game/turfs/flooring/flooring_premade.dm"
 
+	#include "game/antagonist/antagonist.dm"
+
 	#include "datums/hairs.dm"
 	#include "datums/reports.dm"
 	#include "datums/other_soft.dm"
