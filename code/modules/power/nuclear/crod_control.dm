@@ -8,34 +8,25 @@
 	var/datum/nano_module/rcontrol/C
 
 
-/obj/machinery/computer/rod_control/New()
-	..()
+/obj/machinery/computer/rod_control/Initialize()
+	. = ..()
 	C =  new(src)
 	C.id_tag = id_tag
 
 
 /obj/machinery/computer/rod_control/Destroy()
-	qdel(C)
-	C = null
-	..()
+	QDEL_NULL(C)
+	return ..()
 
-/obj/machinery/computer/rod_control/attack_ai(mob/user)
+/obj/machinery/computer/rod_control/interface_interact(mob/user)
 	ui_interact(user)
-
-/obj/machinery/computer/rod_control/attack_hand(mob/user)
-	add_fingerprint(user)
-	ui_interact(user)
+	return TRUE
 
 /obj/machinery/computer/rod_control/ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = 1, var/datum/topic_state/state = GLOB.default_state)
 	C.ui_interact(user, ui_key, ui, force_open, state)
 
-
-
-
-
-
 /datum/nano_module/rcontrol
-	name = "Reactor monitor"
+	name = "Reactor control"
 	var/list/known_c_rods = list()
 	var/id_tag
 
@@ -46,7 +37,7 @@
 	for(var/obj/machinery/control_rod/R in known_c_rods)
 		rodlist.Add(list(list(
 		"name" = R.name,
-		"len" = R.len,
+		"len" = R.rod_length,
 		"targ" = R.target,
 		"broken" = R.nocontrol,
 		"tag" = "\ref[R]"
@@ -67,7 +58,7 @@
 
 /datum/nano_module/rcontrol/proc/FindDevices()
 	known_c_rods = list()
-	for(var/obj/machinery/control_rod/I in control_rods)
+	for(var/obj/machinery/control_rod/I in GLOB.control_rods)
 		if(I.id_tag && (I.id_tag == id_tag)) //&& (get_dist(src, I) < 50))
 			known_c_rods += I
 
@@ -94,9 +85,6 @@
 		return
 	return ..()
 
-
-/obj/machinery/computer/rod_control/setupexample
-	id_tag = "Chernobyl"
 
 
 /obj/item/weapon/stock_parts/circuitboard/reactor_control_console

@@ -1,4 +1,22 @@
-/obj/machinery/computer/reactor_control
+/datum/computer_file/program/reactor_control
+	filename = "Reactor montior"
+	filedesc = "Reactor monitoring software"
+	nanomodule_path = /datum/nano_module/rmon
+	program_icon_state = "generic"
+	program_key_state = "rd_key"
+	program_menu_icon = "power"  // Can somebody draw a radiation icon?
+	extended_desc = "A quite outdated reactor monitoring software"
+	requires_ntnet = 1
+	network_destination = "reactor monitoring system"
+	requires_ntnet_feature = NTNET_SYSTEMCONTROL
+	usage_flags = PROGRAM_LAPTOP | PROGRAM_CONSOLE
+	size = 23
+	category = PROG_ENG
+
+
+
+
+/obj/machinery/computer/reactor_control  // Just regular NanoUI based console
 	name = "Reactor monitor computer"
 	icon_keyboard = "rd_key"
 	icon_screen = "power"
@@ -6,31 +24,37 @@
 	idle_power_usage = 250
 	active_power_usage = 500
 	var/datum/nano_module/rmon/mon
+	var/overterm = 360
+	var/overrad = 120
+	var/overraddec = 121
+	var/overtdec = 10
 
 
-/obj/machinery/computer/reactor_control/New()
-	..()
+/obj/machinery/computer/reactor_control/Process()  // I made this just to configure coefficients directly while in the game. If reactor is working correctly, you're free to delete it
+	for(var/obj/machinery/power/nuclear_rod/R in GLOB.nrods)
+		R.thermaldecaycoeff = overtdec
+		R.raddeccoeff = overraddec
+		R.radkoeff = overrad
+		R.thermalkoeff = overterm
+
+
+/obj/machinery/computer/reactor_control/Initialize()
+	. = ..()
 	mon = new(src)
 	mon.id_tag = id_tag
 
 
 
 /obj/machinery/computer/reactor_control/Destroy()
-	qdel(mon)
-	mon = null
-	..()
+	QDEL_NULL(mon)
+	return ..()
 
-/obj/machinery/computer/reactor_control/attack_ai(mob/user)
+/obj/machinery/computer/reactor_control/interface_interact(mob/user)
 	ui_interact(user)
-
-/obj/machinery/computer/reactor_control/attack_hand(mob/user)
-	add_fingerprint(user)
-	ui_interact(user)
+	return TRUE
 
 /obj/machinery/computer/reactor_control/ui_interact(mob/user, ui_key = "main", var/datum/nanoui/ui = null, var/force_open = 1, var/datum/topic_state/state = GLOB.default_state)
 	mon.ui_interact(user, ui_key, ui, force_open, state)
-
-
 
 /obj/machinery/computer/reactor_control/attackby(var/obj/item/W, var/mob/user)
 	if(isMultitool(W))
@@ -40,11 +64,6 @@
 			mon.id_tag = new_ident
 		return
 	return ..()
-
-
-/obj/machinery/computer/reactor_control/setupexample
-	id_tag = "pripyat"
-
 
 /datum/nano_module/rmon
 	name = "Reactor monitor"
@@ -67,7 +86,10 @@
 
 	data["rods"] = sortByKey(rodlist, "name")
 	data["id"] = id_tag
-	data["summarytemp"] = overtemp/(known_rods.len)
+	if(known_rods.len)
+		data["summarytemp"] = overtemp/(known_rods.len)
+	else
+		data["summarytemp"] = 0
 	ui = SSnano.try_update_ui(user, src, ui_key, ui, data, force_open)
 	if (!ui)
 		ui = new(user, src, ui_key, "rmonitor.tmpl", "Reactor monitoring Console", 600, 400, state = state)
@@ -80,10 +102,9 @@
 
 /datum/nano_module/rmon/proc/FindDevices()
 	known_rods = list()
-	for(var/obj/machinery/power/nuclear_rod/I in nrods)
+	for(var/obj/machinery/power/nuclear_rod/I in GLOB.nrods)
 		if(I.id_tag && (I.id_tag == id_tag)) //&& (get_dist(src, I) < 50))
 			known_rods += I
-
 
 /obj/item/weapon/stock_parts/circuitboard/reactor_montor_console
 	name = T_BOARD("Reactor monitor")

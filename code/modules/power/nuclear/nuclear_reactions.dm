@@ -1,11 +1,9 @@
-var/list/nuclear_reactions
-
-/decl/nuclear_reaction
+/decl/nuclear_reaction  //Nuclear reactions, simillar to fusion and you also can add them as much, as you want.
 	var/substance = ""
 	var/required_rads = 0
 	var/heat_production = 0
 	var/radiation = 0
-	var/list/products = list()
+	var/list/products = list()  // Just DO NOT forget, products must be = 1 in summary.
 
 
 

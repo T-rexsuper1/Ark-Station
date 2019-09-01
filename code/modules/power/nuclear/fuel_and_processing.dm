@@ -1,4 +1,4 @@
-/obj/item/weapon/nuclearfuel    //������� ��� ��������, ������������ ��������������� ��� ��������, ��� �����
+/obj/item/weapon/nuclearfuel    //Nuclear assemblies, for rods refueling
 	var/list/reactants = new /list(0)
 	icon = 'icons/obj/machines/nuclearcore.dmi'
 
@@ -6,10 +6,6 @@
 	if(r)
 		reactants = r
 	..(newloc)
-
-/obj/item/weapon/nuclearfuel/Process()
-	if(!reactants.len)
-		qdel(src)
 
 /obj/item/weapon/nuclearfuel/rod
 	icon_state = "assembly"
@@ -24,7 +20,7 @@
 
 
 
-/obj/machinery/rod_fabricator   //������ ��������� �����, � ��� �� ��������
+/obj/machinery/rod_fabricator   //Finally fixed!
 	name = "Fuel assembly fabricator"
 	icon = 'icons/obj/machines/nuclearcore.dmi'
 	icon_state = "fabricator"
@@ -41,24 +37,20 @@
 
 
 /obj/machinery/rod_fabricator/proc/power(var/power_usage = 0)
-
-
-
 	var/area/A = get_area(src)
 	if(!istype(A) || !A.powered(EQUIP))
 		return FALSE
 
-
 	A.use_power(power_usage, EQUIP)
 	return TRUE
 
-
-
-/obj/machinery/rod_fabricator/Process()
+/obj/machinery/rod_fabricator/on_update_icon()
 	if(power(load))
 		icon_state = "fabricator_active"
 	else
 		icon_state = "fabricator"
+
+/obj/machinery/rod_fabricator/Process()
 	summarymass = 0
 	for(var/mass_reactant in areactants)
 		summarymass += areactants[mass_reactant]
@@ -76,16 +68,12 @@
 				buffer.Add(reactant)
 				buffer[reactant] = amount
 	updateDialog()
+	update_icon()
 
-
-/obj/machinery/rod_fabricator/attack_ai(mob/user)
-	attack_hand(user)
-
-/obj/machinery/rod_fabricator/attack_hand(mob/user)
-	add_fingerprint(user)
+/obj/machinery/rod_fabricator/interface_interact(mob/user)
 	interact(user)
 
-/obj/machinery/rod_fabricator/attackby(obj/item/weapon/Pel, mob/user)   //�������� ���������� � �������� � ������
+/obj/machinery/rod_fabricator/attackby(obj/item/weapon/Pel, mob/user)   //UI is quite outdated, but at least it works
 	if(istype(Pel, /obj/item/weapon/nuclearfuel))
 		src.F = Pel
 		user.unEquip(Pel, src)
@@ -112,21 +100,20 @@
 						buffer.Add(reactant)
 						buffer[reactant] = amount
 				F.reactants[reactant] -= amount
-		//F = null
 
 
 	add_fingerprint(user)
 
-/obj/machinery/rod_fabricator/interact(var/mob/user)                    //��, ��������� ��� � �������
+/obj/machinery/rod_fabricator/interact(var/mob/user)
 	if(power(load))
 		if(stat & !power(load))
 			user.unset_machine()
-			user << browse(null, "window=fuel_control")
+			user << browse(null, "window=fuel_assembly")
 			return
 
 		if (get_dist(src, user) > 1)
 			user.unset_machine()
-			user << browse(null, "window=fuel_control")
+			user << browse(null, "window=fuel_assembly")
 			return
 		var/dat = "<B>Assembly fabricator</B><BR>"
 
@@ -173,25 +160,26 @@
 			<A href='?src=\ref[src];eject=1'>Eject buffer</A>
 			<A href='?src=\ref[src];close=1'>Close</A><BR>"}
 
-		var/datum/browser/popup = new(user, "fuel_control", "Fusion Fuel Control Console", 800, 400, src)
+		var/datum/browser/popup = new(user, "fabricator_control", "Assembly fabricator", 800, 400, src)
 		popup.set_content(dat)
 		popup.open()
 		user.set_machine(src)
 
-/obj/machinery/rod_fabricator/OnTopic(var/mob/user, var/href_list, var/datum/topic_state/state)  //�����  - ��������� ��������
+/obj/machinery/rod_fabricator/OnTopic(var/mob/user, var/href_list, var/datum/topic_state/state)  //Buttons, displayed in UI
 	if(href_list["eject"])
-		if(buffer)
+		if(buffer.len)
 			var/obj/item/weapon/nuclearfuel/pellet/P = new(get_turf(src), buffer)
 			user.put_in_hands(P)
 			buffer = list()
 			playsound(src.loc, 'sound/items/jaws_pry.ogg', 50, 1)
 
 	if(href_list["create"])
-		if(areactants)
+		if(areactants.len)
 			var/obj/item/weapon/nuclearfuel/rod/R = new(get_turf(src), areactants)
 			user.put_in_hands(R)
 			areactants = list()
 			playsound(src.loc, 'sound/items/jaws_pry.ogg', 50, 1)
+
 	if(href_list["ctransfer"])
 		transfering_sub = null
 
@@ -201,14 +189,14 @@
 			transfering_sub = new_val
 
 	if( href_list["close"] )
-		user << browse(null, "window=fuel_control")
+		user << browse(null, "window=fuel_assembly")
 		user.unset_machine()
 
 	return TOPIC_REFRESH
 
 
 
-/obj/machinery/centrifuge            // ���� ����� ����� ���, � ��, � �� ������
+/obj/machinery/centrifuge            // For making fuel without pellets on start.
 	name = "Uranium processing centrifuge"
 	icon = 'icons/obj/machines/nuclearcore.dmi'
 	icon_state = "centrifuge"
@@ -223,9 +211,6 @@
 	var/load = 0
 
 /obj/machinery/centrifuge/proc/power(var/power_usage = 0)
-
-
-
 	var/area/A = get_area(src)
 	if(!istype(A) || !A.powered(EQUIP))
 		return FALSE
@@ -242,20 +227,26 @@
 		amount += N.amount
 		N = null
 
+/obj/machinery/centrifuge/on_update_icon()
+	if(!power(load))
+		icon_state = "centrifuge_off"
+	else
+		if(amount > 0 && power(load))
+			icon_state = "centrifuge_active"
+		else
+			icon_state = "centrifuge"
+
 /obj/machinery/centrifuge/Process()
+	update_icon()
 	if(amount)
 		load = 300
 	else
 		load = 20
-	if(!power(load))
-		icon_state = "centrifuge_off"
 	if(amount >= 20 && power(load))
 		amount -= 20
-		icon_state = "centrifuge_active"
 		update_icon()
 		playsound(src.loc, 'sound/machines/ping.ogg', 50, 1)
 		spawn(50)
-			icon_state = "centrifuge"
 			var/obj/item/weapon/nuclearfuel/pellet/Pl = new(get_turf(src), list("U235" = 550, "U238" = 2250))
 			Pl.name = "Enriched uranium pellet"
 			playsound(src.loc, 'sound/machines/click.ogg', 50, 1)
@@ -277,7 +268,6 @@
 	name = "Waste pellet"
 	reactants = list("nuclear waste" = 1000)
 
-
-/obj/machinery/rod_fabricator/example
-	areactants = list("U235" = 200, "U238" = 500)
-	buffer = list("U238" = 700)
+/obj/item/weapon/nuclearfuel/pellet/thor
+	name = "Thorium pellet"
+	reactants = list("nuclear waste" = 500, "Th232" = 300)

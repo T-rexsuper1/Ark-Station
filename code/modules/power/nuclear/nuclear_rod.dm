@@ -1,15 +1,13 @@
+GLOBAL_LIST_INIT(nrods, list())
 
-var/list/nrods = list()
-
-
-/obj/machinery/power/nuclear_rod   //äåôàéí, ñîðü çà ñëèøêîì áîëüøîå ÷èñëî ñëîâà ßäåðíûé
+/obj/machinery/power/nuclear_rod
 	name = "Nuclear rod"
 	desc = "A nuclear rod, that generates radiation, thermal energy and some problems ."
 	icon = 'icons/obj/machines/nuclearcore.dmi'
 	icon_state = "base_rod"
 	anchored = 1
 	density = 1
-	var/sealed = 0
+	var/sealed = FALSE
 	use_power = 0
 	var/accepted_rads = 0
 	var/own_rads = 0
@@ -20,26 +18,27 @@ var/list/nrods = list()
 	var/list/reactants = list()
 	var/integrity = 100
 	var/broken = 0
+	var/thermalkoeff = 360  //Here is the coefficients, I added them for ingame reactor cinfigurations, if reactor is working correctly, they can be replaced with integers
+	var/radkoeff = 65
+	var/raddeccoeff = 121
+	var/thermaldecaycoeff = 10
 	var/obj/item/weapon/nuclearfuel/rod/F = null
 	var/list/possible_reactions = new /list(0)
 
-/obj/machinery/power/nuclear_rod/New()  // òóò âñå ïîíÿòíî
-	..()
-	nrods += src
-
+/obj/machinery/power/nuclear_rod/Initialize()
+	. = ..()
+	GLOB.nrods += src
 
 /obj/machinery/power/nuclear_rod/Destroy()
-	nrods -= src
+	GLOB.nrods -= src
 	return ..()
-
 
 /obj/machinery/power/nuclear_rod/examine(mob/user)
 	if (..(user, 3))
 		to_chat(user, "The thermometer placed on the rod indicates that \the [src] has the temperature of [rodtemp] K.")
 		return 1
 
-
-/obj/machinery/power/nuclear_rod/attack_hand(mob/user)   //âûíèìàåì ñòåðæåíü
+/obj/machinery/power/nuclear_rod/physical_attack_hand(mob/user)   //Removing the assembly.
 	add_fingerprint(user)
 	if(reactants.len && do_after(user, 30,src) && rodtemp < 1000)
 
@@ -47,36 +46,33 @@ var/list/nrods = list()
 		user.put_in_hands(F)
 		reactants = list()
 
-
-/obj/machinery/power/nuclear_rod/attackby(obj/item/weapon/W, mob/user)  // òóò ó íàñ ðåàêöèÿ íà èíñòðóìåíòû
+/obj/machinery/power/nuclear_rod/attackby(obj/item/weapon/W, mob/user)  //Interaction with tools
 	if(rodtemp < 2000)
 		if(!broken)
 			src.add_fingerprint(user)
 			if(isCrowbar(W))
-				playsound(src.loc, 'sound/machines/click.ogg', 50, 1)
+				playsound(loc, 'sound/machines/click.ogg', 50, 1)
 				user.visible_message("<span class='notice'>[user] begins to switch sealing on the rod.</span>")
 				if(do_after(user, 50,src))
 					switch(sealed)
-						if(1.0)
-							sealed = 0
-						if(0.0)
-							sealed = 1
-					playsound(src.loc, 'sound/items/Deconstruct.ogg', 50, 1)
+						if(TRUE)
+							sealed = FALSE
+						if(FALSE)
+							sealed = TRUE
+					playsound(loc, 'sound/items/Deconstruct.ogg', 50, 1)
 					user.visible_message("<span class='notice'>[user] switched sealing on the rod.</span>")
 					return
 				return
 
 			else if(istype(W, /obj/item/weapon/nuclearfuel/rod))
 				if(!reactants.len && rodtemp < 1000)
-					playsound(src.loc, 'sound/machines/click.ogg', 50, 1)
-					src.F = W
+					playsound(loc, 'sound/machines/click.ogg', 50, 1)
+					F = W
 					message_admins("[user] loaded [src] with [W]")
 					user.unEquip(W, src)
 
-
-
 			else if(isWrench(W))
-				playsound(src.loc, 'sound/items/Ratchet.ogg', 75, 1)
+				playsound(loc, 'sound/items/Ratchet.ogg', 75, 1)
 				switch(anchored)
 					if(1.0)
 						user.visible_message("<span class='notice'>[user] unwrenched rod from the ground.</span>")
@@ -84,7 +80,7 @@ var/list/nrods = list()
 					if(0.0)
 						user.visible_message("<span class='notice'>[user] wrenched rod into place.</span>")
 						anchored = 1
-				return
+
 			else if(isWelder(W))
 				to_chat(user, "<span class='notice'>You are fixing the rod with [W].</span>")
 				playsound(src, 'sound/items/Welder.ogg', 10, 1)
@@ -99,7 +95,6 @@ var/list/nrods = list()
 				if(new_name && user.Adjacent(src))
 					name = new_name
 
-
 		else
 			if(isWelder(W))
 				to_chat(user, "<span class='notice'>You are removing molten rod with [W].</span>")
@@ -109,10 +104,7 @@ var/list/nrods = list()
 	else
 		to_chat(user, "<span class='notice'>Rod is too hot to operate.</span>")
 
-
-
-
-/obj/machinery/power/nuclear_rod/proc/check_state()   // ×òîáû íå ïèñàòü â Ïðîöåññ
+/obj/machinery/power/nuclear_rod/proc/check_state()   // Well, this is kinda ugly, but at least it works
 	if (rodtemp > 5000)
 		integrity -= (rodtemp - 5000)/10
 	if (integrity <= 0 && broken == 0)
@@ -124,44 +116,40 @@ var/list/nrods = list()
 		message_admins("[src] just molten down!")
 		own_rads = 2000
 
-
-/obj/machinery/power/nuclear_rod/Process()     // îáëó÷åíèå è íàãðåâ àòìîñà (â îáîèõ ñìûñëàõ, ïðèâåò àíòàãàì) + ïðîêè
+/obj/machinery/power/nuclear_rod/Process()     // Here is main purpouse of the rod - heating and radiating.
 	React()
 	if(rodtemp < 0)
 		rodtemp = 0
 	if(F && !reactants.len)
 		reactants = F.reactants
-		F = null
-	var/raddecay = rand(109,121)
+		qdel(F)
+	var/raddecay = rand((raddeccoeff * 0.95), raddeccoeff)
 	var/datum/gas_mixture/environment = loc.return_air()
 	if(sealed == 0)
 		if(rodtemp > 500)
-			set_light(0.9, 20, 1, 2, 1)
+			set_light(0.6, 1, 7)
 		var/emitted = own_rads/(rodtemp+1)*(rodtemp+300)
 		SSradiation.radiate(src, emitted)
-		var/ratio = environment.return_pressure()/ONE_ATMOSPHERE
+		var/ratio = min((thermaldecaycoeff / 2), (environment.return_pressure()/ONE_ATMOSPHERE))
 		var/chamb_temp = environment.temperature
-		if (rodtemp > chamb_temp)
+		if ((rodtemp > chamb_temp) && ((rodtemp -= (rodtemp-chamb_temp) * ratio / thermaldecaycoeff) > 0))
 			environment.add_thermal_energy((rodtemp-chamb_temp)*ratio*1200)
-			rodtemp -= (rodtemp-chamb_temp) * ratio / 12
-
-
+			rodtemp -= (rodtemp-chamb_temp) * ratio / thermaldecaycoeff
+		else
+			rodtemp += (chamb_temp - rodtemp) * ratio / 20
 	else
-		SSradiation.radiate(src, round (own_rads * sealcoeff))    // â ïðèíöèïå, ìîæíî ñòàâèòü ëþáîé
+		SSradiation.radiate(src, round (own_rads * sealcoeff))
 	own_rads = own_rads/raddecay*100
-	if(own_rads > 2500)
-		own_rads += own_rads/raddecay*10
+	if(own_rads > 5000)
+		own_rads -= own_rads/raddecay*10
 	if(reaction_rads > 5)
 		reaction_rads = reaction_rads/(rand(191,211))/(rodtemp + 500)*10000
 	check_state()
-	on_update_icon()
 	update_icon()
-
 
 /obj/machinery/power/nuclear_rod/on_update_icon()
 	if (broken == 1)
 		icon_state = "broken_rod"
-
 	else
 		if (sealed == 0)
 			if(!reactants.len)
@@ -179,90 +167,70 @@ var/list/nrods = list()
 		else
 			icon_state = "sealed_rod"
 
-
-
-/obj/machinery/power/nuclear_rod/proc/AddReact(var/name, var/quantity = 1)  //????? ??? ??????
+/obj/machinery/power/nuclear_rod/proc/AddReact(var/name, var/quantity = 1)  //Just put reactants back in rod.
 	if(name in reactants)
 		reactants[name] += quantity
 	else
 		reactants.Add(name)
 		reactants[name] = quantity
 
-
-/obj/machinery/power/nuclear_rod/proc/React()
-	var/repeats = 0
+/obj/machinery/power/nuclear_rod/proc/React() //This proc is quite baggy, so not be suprised by some strange shit, that certanly WILL happen, if you do not fix it.
+	possible_reactions = list()
 	if((SSradiation.get_rads_at_turf(get_turf(src)) - own_rads) > 0)
-		reaction_rads += SSradiation.get_rads_at_turf(get_turf(src)) - own_rads
+		reaction_rads += (SSradiation.get_rads_at_turf(get_turf(src)) - own_rads)
 	if (reaction_rads < 0)
 		reaction_rads = 0
 
 	if(reactants.len)
 		var/list/produced_reactants = new /list(0)
-		for(var/p_reaction_type in subtypesof(/decl/nuclear_reaction))
-			if(repeats > 60)
-				break
-			repeats += 1
-			var/decl/nuclear_reaction/p_reaction = new p_reaction_type
+		var/list/allreactions = decls_repository.get_decls_of_subtype(/decl/nuclear_reaction)
+		for(var/decl in allreactions)
+			var/decl/nuclear_reaction/p_reaction = allreactions[decl]
 			if(!p_reaction.substance || (p_reaction.type in possible_reactions))
 				continue
-			if(reactants[p_reaction.substance] && reaction_rads >= p_reaction.required_rads)
+			if(reactants[p_reaction.substance] && (reaction_rads >= p_reaction.required_rads))
 				possible_reactions += p_reaction.type
-		repeats = 0
 		while(possible_reactions.len)
-			if(repeats > 40)
-				break
-			repeats += 1                 //? ?????? ??? ??????? ??????
-			var/cur_reaction_type = pick(possible_reactions)
+			var/cur_reaction_type = pick_n_take(possible_reactions)
 			var/decl/nuclear_reaction/cur_reaction = new cur_reaction_type
 			var/max_num_reactants = 0
-			if((cur_reaction.required_rads > 0) && (cur_reaction.radiation > 10) && (own_rads < 60) && (rodtemp < 3000))
-				own_rads += (rand(1899, 2101) / 100)
 			if(reaction_rads < cur_reaction.required_rads)
-				possible_reactions -= cur_reaction.type
 				continue
 
-			if(reactants[cur_reaction.substance] > 0.01)  //?O?????u?t?u?|?u?~?y?u ?{???|?y???u?????r?p ?r?????????p?u?}???s?? ?r ???u?p?{???y??
+			if(reactants[cur_reaction.substance] > 0.000001)  //To eliminate especially "weak" reactions
 				if(cur_reaction.required_rads > 0)
 					max_num_reactants = (1 + reaction_rads/cur_reaction.required_rads) * reactants[cur_reaction.substance] / 80000
 				else
 					max_num_reactants = reactants[cur_reaction.substance] / 2000
 			else
 				max_num_reactants =	reactants[cur_reaction.substance]
-
-			if(max_num_reactants <= 0)
+			var/amount_reacting = rand((max_num_reactants * 0.96), max_num_reactants)//This value is sometimes manages to get negative
+			if(amount_reacting <= 0)
 				continue
 
-			var/amount_reacting = rand(max_num_reactants * 0.9, max_num_reactants)
-
-			if( reactants[cur_reaction.substance] - amount_reacting >= 0 )  //?T?q?y???p?u?} ?y?x ?????y???{?p ???u?p?{???p?~?????r
+			if( reactants[cur_reaction.substance] - amount_reacting >= 0 )
 				reactants[cur_reaction.substance] -= amount_reacting
 			else
 				amount_reacting = reactants[cur_reaction.substance]
 				reactants[cur_reaction.substance] = 0
 
-			if((amount_reacting * cur_reaction.heat_production * 40) < 5000)
-				if(((rodtemp + amount_reacting * cur_reaction.heat_production * 360) < 3000) || ((amount_reacting * cur_reaction.heat_production * 320) < 250))
-					rodtemp += amount_reacting * cur_reaction.heat_production * 360
+			if(((amount_reacting * cur_reaction.heat_production * thermalkoeff/9) < 5000) && ((amount_reacting * cur_reaction.heat_production) > 0)) //Change coefficients to configure the rod thermal output. DO NOT forget to doblicate it into if operator.
+				if(((rodtemp + amount_reacting * cur_reaction.heat_production * thermalkoeff) < 3000) || ((amount_reacting * cur_reaction.heat_production * 320) < 250))
+					rodtemp += amount_reacting * cur_reaction.heat_production * thermalkoeff // Temperature increase. Stronger reaction = more temperature.
 				else
-					if(((rodtemp + amount_reacting * cur_reaction.heat_production * 100) < 4000) || ((amount_reacting * cur_reaction.heat_production * 100) < 200))
-						rodtemp += amount_reacting * cur_reaction.heat_production * 100
+					if(((rodtemp + amount_reacting * cur_reaction.heat_production * thermalkoeff/3) < 4000) || ((amount_reacting * cur_reaction.heat_production * 100) < 200))
+						rodtemp += amount_reacting * cur_reaction.heat_production * thermalkoeff/3  
 					else
-						rodtemp += amount_reacting * cur_reaction.heat_production * 40
-			else
-				break
+						rodtemp += amount_reacting * cur_reaction.heat_production * thermalkoeff / 9
 
-			if(own_rads < 300)
-				own_rads += amount_reacting * cur_reaction.radiation * 65
-			else if(own_rads < 1000)
-				own_rads += amount_reacting * cur_reaction.radiation * 30
-			else if(own_rads < 5000)
-				own_rads += amount_reacting * cur_reaction.radiation * 10
-			var/innerrep = 0
-			for(var/pr_reactant in cur_reaction.products)   //?I ?t???q?p?r?|???u?} ???????t???{???? ???u?p?{???y?y
-				if(innerrep > 60)
-					break
-					break
-				innerrep += 1
+			if(own_rads < 500) //Same as above, but with radiation.
+				own_rads += amount_reacting * cur_reaction.radiation * radkoeff  //Coefficients are declared in define of the rod.
+			else if(own_rads < 2000)
+				own_rads += amount_reacting * cur_reaction.radiation * radkoeff/2
+			else if(own_rads < 7000)
+				own_rads += amount_reacting * cur_reaction.radiation * radkoeff/6
+
+			for(var/pr_reactant in cur_reaction.products)   //Well, this code is mostly copied from R-ust and chemistry, so you can look there for better explanations
 				var/success = 0
 				for(var/check_reactant in produced_reactants)
 					if(check_reactant == pr_reactant)
@@ -271,38 +239,7 @@ var/list/nrods = list()
 						break
 				if(!success)
 					produced_reactants[pr_reactant] = cur_reaction.products[pr_reactant] * amount_reacting
-			innerrep = 0
-			possible_reactions -= cur_reaction.type
-		repeats = 0
+		//	possible_reactions -= cur_reaction.type
 		for(var/prreactant in produced_reactants)
-			if(repeats > 100)
-				break
-			repeats += 1
-			AddReact(prreactant, produced_reactants[prreactant])  //?p ???u???u???? ?r???u ???????y?x?r?u?t?u?~?~???u ?y?t?u?? ???q???p???~?? ?r ???u?{???p?~????
+			AddReact(prreactant, produced_reactants[prreactant])  //Look at AddReact() for details
 	return 1
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/obj/machinery/power/nuclear_rod/setupexample  //äëÿ òåñòîâ
-	rodtemp = 2000
-	anchored = 1
-	accepted_rads = 200
-	reactants = list("U235" = 1000, "U238" = 2000)
-	id_tag = "pripyat"
